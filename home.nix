@@ -1,9 +1,14 @@
 {
   pkgs,
   inputs,
+  lib,
+  osConfig ? null,
   ...
 }:
 
+let
+  isVm = osConfig != null && (osConfig.ticoOS.isVm or false);
+in
 {
   home.username = "tico";
   home.homeDirectory = "/home/tico";
@@ -199,7 +204,11 @@
       "$mainMod" = "SUPER";
       "$terminal" = "kitty";
 
-      env = [
+      env = if isVm then [
+        "WLR_NO_HARDWARE_CURSORS,1"
+        "WLR_RENDERER_ALLOW_SOFTWARE,1"
+        "LIBGL_ALWAYS_SOFTWARE,1"
+      ] else [
         "LIBVA_DRIVER_NAME,nvidia"
         "GBM_BACKEND,nvidia-drm"
         "__GLX_VENDOR_LIBRARY_NAME,nvidia"
@@ -218,7 +227,7 @@
         "waybar"
         "dunst"
         "swww-daemon"
-        "sleep 1 && swww img /home/tico/Pictures/wallpaper.png"
+        "test -f /home/tico/Pictures/wallpaper.png && swww img /home/tico/Pictures/wallpaper.png"
       ];
 
       bind = [

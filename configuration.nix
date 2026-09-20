@@ -23,10 +23,6 @@ in
     (lib.mkIf cfg.isVm {
       boot.loader.grub.enable = false;
       boot.initrd.systemd.enable = true;
-      fileSystems."/" = {
-        device = "/dev/vda";
-        fsType = "ext4";
-      };
     })
 
     {
