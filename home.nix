@@ -1,17 +1,18 @@
 {
   pkgs,
-  inputs,
-  lib,
   osConfig ? null,
+  username ? "tico",
   ...
 }:
 
 let
-  isVm = osConfig != null && (osConfig.ticoOS.isVm or false);
+  effectiveUsername =
+    if osConfig != null then osConfig.ticoOS.username else username;
+  homeDir = "/home/${effectiveUsername}";
 in
 {
-  home.username = "tico";
-  home.homeDirectory = "/home/tico";
+  home.username = effectiveUsername;
+  home.homeDirectory = homeDir;
   home.stateVersion = "24.11";
 
   home.packages = with pkgs; [
@@ -204,16 +205,14 @@ in
       "$mainMod" = "SUPER";
       "$terminal" = "kitty";
 
-      env = if isVm then [
-        "WLR_NO_HARDWARE_CURSORS,1"
-        "WLR_RENDERER_ALLOW_SOFTWARE,1"
-        "LIBGL_ALWAYS_SOFTWARE,1"
-      ] else [
-        "LIBVA_DRIVER_NAME,nvidia"
-        "GBM_BACKEND,nvidia-drm"
-        "__GLX_VENDOR_LIBRARY_NAME,nvidia"
-        "WLR_NO_HARDWARE_CURSORS,1"
-      ];
+      env =
+        if osConfig != null && osConfig.ticoOS.softwareRendering then [
+          "WLR_NO_HARDWARE_CURSORS,1"
+          "WLR_RENDERER_ALLOW_SOFTWARE,1"
+          "LIBGL_ALWAYS_SOFTWARE,1"
+        ] else [
+          "WLR_RENDERER_ALLOW_SOFTWARE,1"
+        ];
 
       monitor = ",preferred,auto,1";
 
@@ -227,7 +226,7 @@ in
         "waybar"
         "dunst"
         "swww-daemon"
-        "test -f /home/tico/Pictures/wallpaper.png && swww img /home/tico/Pictures/wallpaper.png"
+        "test -f ${homeDir}/Pictures/wallpaper.png && swww img ${homeDir}/Pictures/wallpaper.png"
       ];
 
       bind = [
