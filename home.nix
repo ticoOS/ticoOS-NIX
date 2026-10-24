@@ -28,7 +28,7 @@ in
     dunst
     libnotify
     brightnessctl
-    swww
+    awww
     git
     kdePackages.dolphin
 
@@ -79,7 +79,7 @@ in
       figlet -f slant "ticoOS NIX"
       echo "TICO.CO todos direitos reservados (2019©2026)"
       echo "___________________________________________________"
-      echo "BETA v0.1.0"
+      echo "BETA v1.0.0"
       echo ""
     '';
   };
@@ -226,7 +226,7 @@ in
       exec-once = [
         "waybar"
         "dunst"
-        "swww-daemon"
+        "awww-daemon"
         "test -f /home/tico/Pictures/wallpaper.png && swww img /home/tico/Pictures/wallpaper.png"
       ];
 
