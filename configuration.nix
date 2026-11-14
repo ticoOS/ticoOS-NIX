@@ -1,96 +1,105 @@
-{ config, lib, pkgs, ... }:
+{ pkgs, modulesPath, ... }: {
+  imports = [
+    # Base oficial gráfica com o instalador Calamares pré-configurado
+    "${modulesPath}/installer/cd-dvd/installation-cd-graphical-calamares.nix"
+  ];
 
-let
-  cfg = config.ticoOS;
-in
-{
-  options.ticoOS = {
-    enableNvidia = lib.mkEnableOption "NVIDIA GPU support";
-    isVm = lib.mkEnableOption "virtual machine mode";
+  networking.hostName = "ticoOS";
+  system.stateVersion = "25.05";
+  nixpkgs.config.allowUnfree = true;
+
+  # 1. COMPATIBILIDADE DE HARDWARE E DISCOS VIRTUAIS
+  services.qemuGuest.enable = true;
+  boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_scsi" "ahci" "sd_mod" ];
+
+  # 2. ENTRA DIRETO NO HYPRLAND NA ISO LIVE
+  programs.hyprland.enable = true;                      
+  services.desktopManager.gnome.enable = pkgs.lib.mkForce false;
+
+  # O Calamares Live exige logar como "nixos" para o script Python funcionar sem erros
+  services.displayManager.autoLogin = { enable = true; user = "nixos"; };
+  services.displayManager.defaultSession = "hyprland";
+
+  # Criando o usuário "nixos" para a ISO rodar o instalador sem travar
+  users.users.nixos = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "disk" "storage" "kvm" ];
   };
 
-  config = lib.mkMerge [
-    {
-      ticoOS.enableNvidia = lib.mkDefault true;
-      ticoOS.isVm = lib.mkDefault false;
-    }
+  # Criando o seu usuário administrador "tico" na ISO
+  users.users.tico = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" "disk" "storage" "kvm" ];
+    initialPassword = "123";
+  };
 
-    (lib.mkIf (!cfg.isVm) {
-      boot.loader.systemd-boot.enable = true;
-      boot.loader.efi.canTouchEfiVariables = true;
-    })
+  # Ativa o Polkit GNOME para dar suporte a autenticações gráficas no Hyprland
+  security.polkit.enable = true;
+  systemd.user.services.polkit-gnome-authentication-agent-1 = {
+    description = "polkit-gnome-authentication-agent-1";
+    wantedBy = [ "graphical-session.target" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+      Restart = "on-failure";
+      RestartSec = 1;
+      TimeoutStopSec = 10;
+    };
+  };
 
-    (lib.mkIf cfg.isVm {
-      boot.loader.grub.enable = false;
-      boot.initrd.systemd.enable = true;
-    })
+  # AUTOSTART DO CALAMARES CORRIGIDO
+  environment.etc."xdg/autostart/calamares.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Instalar ticoOS
+    Exec=calamares
+    Icon=calamares
+    Categories=System;Installer;
+  '';
 
-    {
-      nix.settings.experimental-features = [ "nix-command" "flakes" ];
-      boot.kernelPackages = pkgs.linuxPackages_latest;
-
-      networking.hostName = "ticoOS";
-      networking.networkmanager.enable = true;
-
-      services.displayManager.defaultSession = "hyprland";
-
-      time.timeZone = "America/Sao_Paulo";
-
-      hardware.graphics = {
-        enable = true;
-        enable32Bit = true;
-      };
-
-      i18n.defaultLocale = "pt_BR.UTF-8";
-
-      i18n.extraLocaleSettings = {
-        LC_ADDRESS = "pt_BR.UTF-8";
-        LC_IDENTIFICATION = "pt_BR.UTF-8";
-        LC_MEASUREMENT = "pt_BR.UTF-8";
-        LC_MONETARY = "pt_BR.UTF-8";
-        LC_NAME = "pt_BR.UTF-8";
-        LC_NUMERIC = "pt_BR.UTF-8";
-        LC_PAPER = "pt_BR.UTF-8";
-        LC_TELEPHONE = "pt_BR.UTF-8";
-        LC_TIME = "pt_BR.UTF-8";
-      };
-
-      services.xserver.xkb = {
-        layout = "br";
-        variant = "";
-      };
-
-      console.keyMap = "br-abnt2";
-
-      users.users."tico" = {
-        isNormalUser = true;
-        description = "tico";
-        extraGroups = [ "networkmanager" "wheel" ];
-        packages = with pkgs; [];
-      };
-
-      nixpkgs.config.allowUnfree = true;
-      system.stateVersion = "26.05";
-    }
-
-    (lib.mkIf cfg.enableNvidia {
-      boot.kernelParams = [ "nvidia_drm.modeset=1" "nvidia_drm.fbdev=1" ];
-      boot.initrd.kernelModules = [ "nvidia" "nvidia_drm" ];
-      services.xserver.videoDrivers = [ "nvidia" ];
-
-      hardware.nvidia = {
-        modesetting.enable = true;
-        powerManagement.enable = false;
-        open = false;
-        nvidiaSettings = true;
-        package = config.boot.kernelPackages.nvidiaPackages.stable;
-      };
-
-      environment.sessionVariables = {
-        GBM_BACKEND = "nvidia-drm";
-        __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-        WLR_NO_HARDWARE_CURSORS = "1";
-      };
-    })
+  environment.systemPackages = with pkgs; [
+    kitty wofi git neovim polkit_gnome
   ];
+
+  networking.networkmanager.enable = true;
+  i18n.defaultLocale = "pt_BR.UTF-8";
+  console.keyMap = "br-abnt2";
+  isoImage.edition = "ticoOS-BETA";
+
+  # 3. SEGREDO DA DISTRO: O que vai para o HD do usuário final (Puro Hyprland)
+  installer.cloneConfig = false;
+  installer.cloneConfigExtra = ''
+    { pkgs, ... }: {
+      imports = [ ./hardware-configuration.nix ];
+      
+      boot.loader.systemd-boot.enable = true;
+      boot.loader.systemd-boot.installAsRemovable = true;
+      boot.loader.efi.canTouchEfiVariables = true;
+      
+      networking.hostName = "ticoOS-distro";
+      networking.networkmanager.enable = true;
+      
+      programs.hyprland.enable = true;
+      environment.systemPackages = with pkgs; [ kitty wofi git neovim ];
+      
+      services.desktopManager.gnome.enable = false;
+      services.getty.autologinUser = "tico";
+
+      # Isso garante que o usuário "tico" seja criado no computador de quem instalar a ISO
+      users.users.tico = {
+        isNormalUser = true;
+        extraGroups = [ "wheel" "networkmanager" "video" "audio" ];
+        initialPassword = "123";
+      };
+      
+      nixpkgs.config.allowUnfree = true;
+      i18n.defaultLocale = "pt_BR.UTF-8";
+      console.keyMap = "br-abnt2";
+      services.xserver.xkb.layout = "br";
+      
+      system.stateVersion = "25.05";
+    }
+  '';
 }
+
+
