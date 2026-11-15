@@ -3,15 +3,51 @@
   inputs,
   lib,
   osConfig ? null,
+  username ? "tico",
   ...
 }:
 
 let
-  isVm = osConfig != null && (osConfig.ticoOS.isVm or false);
+  gpu = if osConfig != null then (osConfig.ticoOS.gpu or "auto") else "auto";
+  isVm = gpu == "vm";
+  ticoosVersion = if osConfig != null then (osConfig.ticoOS.version or "0.0.2") else "0.0.2";
+  ticoosHelp = pkgs.writeShellApplication {
+    name = "ticoos-help";
+    runtimeInputs = [ pkgs.zenity ];
+    text = ''
+    zenity --info --title="Comandos básicos do ticoOS" --width=620 --height=480 --ok-label="Fechar"  --text='<b>SUPER + Q</b> _ Terminal (kitty)
+  <b>SUPER + SPACE</b> _ Launcher (rofi)
+  <b>SUPER + H</b> _ Comandos básicos
+  <b>SUPER + C</b> _ Fechar janela
+  <b>SUPER + E</b> _ Yazi (Gerenciador de arquivos)
+  <b>SUPER + M</b> _ Sair do hyprland (TTY)
+  <b>SUPER + 1..9</b> _ Trocar de workspaces 
+  <b>SUPER + SHIFT + 1..9</b> _ Mover janela workspace
+  <b>PRINT</b> _ Screenshot da tela
+  <b>PRINT + SHIFT</b> _ Screenshot em area
+  <small>Volume e brilho: teclas de mídia</small>'
+    '';
+  };
+
+  hyprlandEnv =
+    if isVm then [
+      "WLR_NO_HARDWARE_CURSORS,1"
+      "WLR_RENDERER_ALLOW_SOFTWARE,1"
+      "LIBGL_ALWAYS_SOFTWARE,1"
+    ]
+    else if gpu == "nvidia" then [
+      "LIBVA_DRIVER_NAME,nvidia"
+      "GBM_BACKEND,nvidia-drm"
+      "__GLX_VENDOR_LIBRARY_NAME,nvidia"
+      "WLR_NO_HARDWARE_CURSORS,1"
+    ]
+    else [
+      "WLR_NO_HARDWARE_CURSORS,1"
+    ];
 in
 {
-  home.username = "tico";
-  home.homeDirectory = "/home/tico";
+  home.username = username;
+  home.homeDirectory = "/home/${username}";
   home.stateVersion = "24.11";
 
   home.packages = with pkgs; [
@@ -30,7 +66,10 @@ in
     brightnessctl
     awww
     git
-    kdePackages.dolphin
+    yazi
+    zenity
+    ticoosHelp
+    opencode
 
     (stdenv.mkDerivation {
       pname = "vcr-osd-mono";
@@ -45,6 +84,40 @@ in
       installPhase = ''
         mkdir -p $out/share/fonts/truetype
         cp $src/Terrace/resources/fonts/VCR-OSD-Mono.ttf $out/share/fonts/truetype/VCR_OSD_MONO.ttf
+      '';
+    })
+
+    (writeShellApplication {
+      name = "ticoos-welcome";
+      runtimeInputs = [ zenity xdg-utils coreutils ];
+      text = ''
+        marker="$HOME/.config/ticoos/welcome-shown"
+        if [ -e "$marker" ]; then
+          exit 0
+        fi
+
+        mkdir -p "$(dirname "$marker")"
+
+       while true; do  
+        choice="$(zenity --list \
+          --title="Bem-vindo ao ticoOS" \
+          --text='<span size="x-large" weight="bold">ticoOS BETA v${ticoosVersion}</span>
+
+Bem-vindo ao ticoOS! Escolha uma opção:' \
+          --column="Ação" \
+          --width=560 --height=380 \
+          --ok-label="Continuar" \
+          "Comandos básicos" "Abrir o site" "Entrar no Discord" "Fechar" 2>/dev/null || true)"
+
+        case "$choice" in
+          "Comandos básicos") ${ticoosHelp}/bin/ticoos-help ;;
+          "Abrir o site") xdg-open "https://ticoos.github.io" >/dev/null 2>&1 || true ;;
+          "Entrar no Discord") xdg-open "https://discord.gg/RcHbENp8wj" >/dev/null 2>&1 || true ;;
+          "Fechar"|"") break ;;
+         esac
+        done
+
+        touch "$marker"
       '';
     })
   ];
@@ -77,10 +150,13 @@ in
       clear
       echo "___________________________________________________"
       figlet -f slant "ticoOS NIX"
-      echo "TICO.CO todos direitos reservados (2019©2026)"
+      echo "TICO.CO todos direitos reservados ©2026"
       echo "___________________________________________________"
-      echo "BETA v1.0.0"
+      echo "BETA v${ticoosVersion}"
       echo ""
+      1155() {
+        figlet -f slant "seco seco filho"
+      }
     '';
   };
 
@@ -204,16 +280,7 @@ in
       "$mainMod" = "SUPER";
       "$terminal" = "kitty";
 
-      env = if isVm then [
-        "WLR_NO_HARDWARE_CURSORS,1"
-        "WLR_RENDERER_ALLOW_SOFTWARE,1"
-        "LIBGL_ALWAYS_SOFTWARE,1"
-      ] else [
-        "LIBVA_DRIVER_NAME,nvidia"
-        "GBM_BACKEND,nvidia-drm"
-        "__GLX_VENDOR_LIBRARY_NAME,nvidia"
-        "WLR_NO_HARDWARE_CURSORS,1"
-      ];
+      env = hyprlandEnv;
 
       monitor = ",preferred,auto,1";
 
@@ -227,7 +294,8 @@ in
         "waybar"
         "dunst"
         "awww-daemon"
-        "test -f /home/tico/Pictures/wallpaper.png && swww img /home/tico/Pictures/wallpaper.png"
+        "test -f ~/Pictures/wallpaper.png && awww img ~/Pictures/wallpaper.png"
+        "ticoos-welcome"
       ];
 
       bind = [
@@ -236,6 +304,7 @@ in
         "$mainMod, C, exec, hyprctl dispatch killactive"
         "$mainMod, M, exit,"
         "$mainMod, E, exec, $terminal -e yazi"
+        "$mainMod, H, exec, ticoos-help"
 
         ", XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
         ", XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"

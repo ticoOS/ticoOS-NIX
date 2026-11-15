@@ -17,53 +17,56 @@
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
     let
-      homeManagerIntegration = {
-        home-manager.useGlobalPkgs = true;
-        home-manager.useUserPackages = true;
-        home-manager.backupFileExtension = "backup";
-        home-manager.extraSpecialArgs = { inherit inputs; };
-        home-manager.users.tico = {
-          imports = [
-            ./home.nix
-            inputs.nixvim.homeManagerModules.nixvim
-          ];
-        };
+      lib = nixpkgs.lib;
+
+      mkSystem = { modules ? [ ] }: nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit inputs; };
+        modules = [ self.nixosModules.default ] ++ modules;
       };
+
+      dev = mkSystem { modules = [ ./hosts/ticoOS/local.nix ]; };
+      vm = mkSystem { modules = [ ./vm.nix ]; };
+
+      iso = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit inputs; };
+        modules = [
+          ./iso/configuration.nix
+          ./system.nix
+        ];
+      };
+
+      hasIso = builtins.pathExists ./iso/configuration.nix;
+      isoPackage = iso.config.system.build.isoImage;
+      vmPackage = vm.config.system.build.vm;
     in
     {
+      nixosModules.default = ./modules/default.nix;
 
-      nixosConfigurations.ticoOS = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./configuration.nix
-          ./hardware-configuration.nix
-          ./system.nix
-          home-manager.nixosModules.home-manager
-          homeManagerIntegration
-        ];
+      lib.mkSystem = mkSystem;
+
+      nixosConfigurations = {
+        ticoOS = dev;
+        ticoOS-vm = vm;
+      } // lib.optionalAttrs hasIso {
+        ticoOS-iso = iso;
       };
 
-      nixosConfigurations.ticoOS-vm = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./configuration.nix
-          ./vm.nix
-          ./system.nix
-          home-manager.nixosModules.home-manager
-          homeManagerIntegration
-        ];
+      packages.x86_64-linux = {
+        vm = vmPackage;
+      } // lib.optionalAttrs hasIso {
+        default = isoPackage;
+        iso = isoPackage;
       };
 
-    homeConfigurations.tico = home-manager.lib.homeManagerConfiguration {
-      pkgs = nixpkgs.legacyPackages.x86_64-linux;
-      extraSpecialArgs = { inherit inputs; };
-      modules = [
-        ./home.nix
-        inputs.nixvim.homeManagerModules.nixvim
-      ];
+      homeConfigurations.tico = home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        extraSpecialArgs = { inherit inputs; };
+        modules = [
+          ./home.nix
+          inputs.nixvim.homeManagerModules.nixvim
+        ];
+      };
     };
-
-  };
 }
