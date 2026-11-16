@@ -151,7 +151,7 @@ def _total_memory_gib():
 
 
 REQUIRED_FREE_GIB = 16.0
-REQUIRED_RAM_GIB = 6.0
+REQUIRED_RAM_GIB = 2.0
 
 
 def _check_requirements(root_mount_point):
