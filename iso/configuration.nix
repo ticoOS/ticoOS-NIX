@@ -32,7 +32,8 @@ in
         postPatch = (old.postPatch or "") + ''
           cp ${./calamares-main.py} modules/nixos/main.py
           sed -i '/^  - packagechooser$/d' config/settings.conf
-          sed -i 's/requiredRam: .*/requiredRam: 2.0/' config/modules/welcome.conf
+          sed -i 's/requiredStorage: .*/requiredStorage: 20/' config/modules/welcome.conf
+          sed -i 's/requiredRam: .*/requiredRam: 6.0/' config/modules/welcome.conf
         '';
       });
     })

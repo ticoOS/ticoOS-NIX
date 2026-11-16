@@ -150,6 +150,44 @@ def _total_memory_gib():
     return 0.0
 
 
+REQUIRED_FREE_GIB = 16.0
+REQUIRED_RAM_GIB = 6.0
+
+
+def _check_requirements(root_mount_point):
+    try:
+        stats = os.statvfs(root_mount_point)
+        free_gib = stats.f_bfree * stats.f_frsize / (1024 ** 3)
+    except OSError:
+        free_gib = None
+
+    if free_gib is not None and free_gib < REQUIRED_FREE_GIB:
+        return (
+            _("Espaço em disco insuficiente"),
+            _(
+                "O ticoOS precisa de pelo menos {required:.0f} GiB livres na "
+                "partição raiz, mas o destino tem apenas {free:.1f} GiB.\n\n"
+                "Aumente a partição raiz (recomendado: 20 GiB ou mais) e "
+                "tente novamente."
+            ).format(required=REQUIRED_FREE_GIB, free=free_gib),
+        )
+
+    memory_gib = _total_memory_gib()
+    if memory_gib and memory_gib < REQUIRED_RAM_GIB:
+        return (
+            _("Memória insuficiente"),
+            _(
+                "O ticoOS precisa de pelo menos {required:.0f} GiB de RAM para "
+                "instalar e compilar os pacotes do sistema, mas esta máquina "
+                "tem {free:.1f} GiB.\n\n"
+                "Aumente a memória da máquina virtual ou use um computador com "
+                "mais RAM."
+            ).format(required=REQUIRED_RAM_GIB, free=memory_gib),
+        )
+
+    return None
+
+
 def _detect_gpu():
     try:
         output = subprocess.check_output(
@@ -351,6 +389,10 @@ def _install(root_mount_point):
         )
     )
 
+    requirement_error = _check_requirements(root_mount_point)
+    if requirement_error:
+        return requirement_error
+
     status = _("Locking ticoOS configuration")
     libcalamares.job.setprogress(0.08)
     subprocess.check_output(
@@ -374,6 +416,9 @@ def _install(root_mount_point):
         "--option",
         "build-dir",
         "/nix/var/nix/builds",
+        "--option",
+        "fallback",
+        "true",
     ]
     memory_gib = _total_memory_gib()
     if memory_gib < 7.5:

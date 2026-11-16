@@ -10,7 +10,7 @@
 let
   gpu = if osConfig != null then (osConfig.ticoOS.gpu or "auto") else "auto";
   isVm = gpu == "vm";
-  ticoosVersion = if osConfig != null then (osConfig.ticoOS.version or "0.1.0") else "0.1.0";
+  ticoosVersion = if osConfig != null then (osConfig.ticoOS.version or "0.1.1") else "0.1.1";
   ticoosHelp = pkgs.writeShellApplication {
     name = "ticoos-help";
     runtimeInputs = [ pkgs.zenity ];
