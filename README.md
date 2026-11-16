@@ -30,4 +30,4 @@ O comando atualiza o input `ticoos` do flake local e reconstrói o sistema com
 
 ## Versão
 
-BETA v0.0.2
+BETA v0.1.0

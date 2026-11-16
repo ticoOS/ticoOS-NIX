@@ -21,7 +21,7 @@
 
     version = lib.mkOption {
       type = lib.types.str;
-      default = "0.0.2";
+      default = "0.1.0";
       description = "Versao do ticoOS.";
     };
 
